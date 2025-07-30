@@ -2,8 +2,7 @@ import lightning as L
 import torch
 from torch import nn, optim
 from typing import Dict, Any
-from torchmetrics.classification import MulticlassAccuracy
-
+from torchmetrics.functional.classification import multiclass_accuracy
 
 class LN_LR_Encoder(nn.Module):
     """Multiple filter banks, project onto low dimensional subspace"""
@@ -151,7 +150,8 @@ class LogisticRegressionModel(L.LightningModule):
         nb_feat: int = 19,
     ):
         super().__init__()
-        self.task_ids = list(output_dims.keys())
+        self.output_dims = output_dims
+        self.task_ids = list(self.output_dims.keys())
         self.batch_size = batch_size
         self.bias = bias
         self.block_len = block_len
@@ -165,14 +165,13 @@ class LogisticRegressionModel(L.LightningModule):
         for task_id in self.task_ids:
             self.decoder.append(
                 nn.Linear(
-                    self.encoder.output_shape, output_dims[task_id], bias=self.bias
+                    self.encoder.output_shape, self.output_dims[task_id], bias=self.bias
                 )
             )
 
         self.decoder = nn.ModuleList(self.decoder)
         self.log_softmax = nn.LogSoftmax(dim=1)
         self.criterion = nn.NLLLoss()
-        self.acc = MulticlassAccuracy(num_classes=3, top_k=1, average='macro', multidim_average='global')
         self.l1_weight = l1_weight
         self.lr = lr
 
@@ -231,7 +230,7 @@ class LogisticRegressionModel(L.LightningModule):
         x, y, task_id = batch
         out = self.forward(x, task_id)
         loss = self.criterion(out, y) + self.l1_weight * self.L1_regularized_loss()
-        acc = self.acc(out, y)
+        acc = multiclass_accuracy(out, y, num_classes=self.output_dims[task_id])
         return out, loss, acc
 
     def training_step(self, batch):
