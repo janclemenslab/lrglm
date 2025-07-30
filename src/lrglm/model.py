@@ -230,7 +230,7 @@ class LogisticRegressionModel(L.LightningModule):
         x, y, task_id = batch
         out = self.forward(x, task_id)
         loss = self.criterion(out, y) + self.l1_weight * self.L1_regularized_loss()
-        acc = multiclass_accuracy(out, y, num_classes=self.output_dims[int(task_id[0])])
+        acc = multiclass_accuracy(out, y, num_classes=self.output_dims[self.task_ids[int(task_id[0])]])
         return out, loss, acc
 
     def training_step(self, batch):
