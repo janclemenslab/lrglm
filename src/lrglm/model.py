@@ -2,23 +2,40 @@ import lightning as L
 import torch
 from torch import nn, optim
 from typing import Dict, Any
-
+from torchmetrics.classification import MulticlassAccuracy
 
 
 class LN_LR_Encoder(nn.Module):
     """Multiple filter banks, project onto low dimensional subspace"""
-    def __init__(self, nb_feat: int, latent_dim: int, block_len: int, bias: bool = False):
+
+    def __init__(
+        self, nb_feat: int, latent_dim: int, block_len: int, bias: bool = False
+    ):
         super().__init__()
         self.nb_feat = nb_feat
         self.latent_dim = latent_dim
         self.block_len = block_len
         self.bias = bias
 
-        self.filters = nn.Conv1d(self.nb_feat, self.latent_dim * self.nb_feat, kernel_size=self.block_len, groups=self.nb_feat, bias=self.bias)
-        self.project = nn.Conv1d(self.latent_dim, self.latent_dim, kernel_size=self.nb_feat, groups=self.latent_dim, bias=self.bias)
+        self.filters = nn.Conv1d(
+            self.nb_feat,
+            self.latent_dim * self.nb_feat,
+            kernel_size=self.block_len,
+            groups=self.nb_feat,
+            bias=self.bias,
+        )
+        self.project = nn.Conv1d(
+            self.latent_dim,
+            self.latent_dim,
+            kernel_size=self.nb_feat,
+            groups=self.latent_dim,
+            bias=self.bias,
+        )
 
         self.example_data = torch.randn(7, self.nb_feat, self.block_len)
-        self.output_shape = self.latent_dim  #[None, *self.forward(self.example_data).shape[1:]]
+        self.output_shape = (
+            self.latent_dim
+        )  # [None, *self.forward(self.example_data).shape[1:]]
 
     def forward(self, x):
         x = self.filters(x)
@@ -31,7 +48,9 @@ class LN_LR_Encoder(nn.Module):
 class LN_what_Encoder(nn.Module):
     """Multiple filter banks, project onto low dimensional subspace, V2"""
 
-    def __init__(self, nb_feat: int, latent_dim: int, block_len: int, bias: bool = False):
+    def __init__(
+        self, nb_feat: int, latent_dim: int, block_len: int, bias: bool = False
+    ):
         super().__init__()
         self.nb_feat = nb_feat
         self.latent_dim = latent_dim
@@ -39,7 +58,13 @@ class LN_what_Encoder(nn.Module):
         self.bias = bias
 
         self.encoder = nn.Sequential(
-            nn.Conv1d(self.nb_feat, self.latent_dim * self.nb_feat, kernel_size=self.block_len, groups=self.nb_feat, bias=self.bias),
+            nn.Conv1d(
+                self.nb_feat,
+                self.latent_dim * self.nb_feat,
+                kernel_size=self.block_len,
+                groups=self.nb_feat,
+                bias=self.bias,
+            ),
             nn.Tanh(),
             nn.Flatten(1),
             nn.Unflatten(-1, (self.nb_feat, self.latent_dim)),
@@ -48,15 +73,20 @@ class LN_what_Encoder(nn.Module):
         )
 
         self.example_data = torch.randn(7, self.nb_feat, self.block_len)
-        self.output_shape = self.latent_dim  #[None, *self.forward(self.example_data).shape[1:]]
+        self.output_shape = (
+            self.latent_dim
+        )  # [None, *self.forward(self.example_data).shape[1:]]
 
     def forward(self, x):
         return self.encoder(x)
 
+
 class LN_full_Encoder(nn.Module):
     """Multiple filter banks, full space, V2"""
 
-    def __init__(self, nb_feat: int, latent_dim: int, block_len: int, bias: bool = False):
+    def __init__(
+        self, nb_feat: int, latent_dim: int, block_len: int, bias: bool = False
+    ):
         super().__init__()
         self.nb_feat = nb_feat
         self.latent_dim = latent_dim
@@ -64,7 +94,13 @@ class LN_full_Encoder(nn.Module):
         self.bias = bias
 
         self.encoder = nn.Sequential(
-            nn.Conv1d(self.nb_feat, self.latent_dim * self.nb_feat, kernel_size=self.block_len, groups=self.nb_feat, bias=self.bias),
+            nn.Conv1d(
+                self.nb_feat,
+                self.latent_dim * self.nb_feat,
+                kernel_size=self.block_len,
+                groups=self.nb_feat,
+                bias=self.bias,
+            ),
             nn.Tanh(),
             nn.Flatten(1),
         )
@@ -75,11 +111,12 @@ class LN_full_Encoder(nn.Module):
         return self.encoder(x)
 
 
-
 class LN_Simple_Encoder(nn.Module):
     """Linear"""
 
-    def __init__(self, nb_feat: int, latent_dim: int, block_len: int, bias: bool = False):
+    def __init__(
+        self, nb_feat: int, latent_dim: int, block_len: int, bias: bool = False
+    ):
         super().__init__()
         self.nb_feat = nb_feat
         self.latent_dim = latent_dim
@@ -107,13 +144,12 @@ class LogisticRegressionModel(L.LightningModule):
         output_dims: Dict[Any, int],
         batch_size: int,
         encoder: nn.Module,
-        lr: float =1e-3,
-        l1_weight: float =0.1,
+        lr: float = 1e-3,
+        l1_weight: float = 0.1,
         bias: bool = False,
         block_len: int = 6,
         nb_feat: int = 19,
     ):
-
         super().__init__()
         self.task_ids = list(output_dims.keys())
         self.batch_size = batch_size
@@ -127,11 +163,16 @@ class LogisticRegressionModel(L.LightningModule):
         # per-species decoders from the latent space to the outputs
         self.decoder = []
         for task_id in self.task_ids:
-            self.decoder.append(nn.Linear(self.encoder.output_shape, output_dims[task_id], bias=self.bias))
+            self.decoder.append(
+                nn.Linear(
+                    self.encoder.output_shape, output_dims[task_id], bias=self.bias
+                )
+            )
 
         self.decoder = nn.ModuleList(self.decoder)
         self.log_softmax = nn.LogSoftmax(dim=1)
         self.criterion = nn.NLLLoss()
+        self.acc = MulticlassAccuracy(num_classes=3, top_k=1, average='macro', multidim_average='global')
         self.l1_weight = l1_weight
         self.lr = lr
 
@@ -189,21 +230,22 @@ class LogisticRegressionModel(L.LightningModule):
         x, y, task_id = batch
         out = self.forward(x, task_id)
         loss = self.criterion(out, y) + self.l1_weight * self.L1_regularized_loss()
-        return out, loss
+        acc = self.acc(out, y)
+        return out, loss, acc
 
     def training_step(self, batch):
-        out, loss = self.step(batch)
-        self.log_dict({"train_loss": loss}, prog_bar=True, batch_size=self.batch_size)
+        out, loss, acc = self.step(batch)
+        self.log_dict({"train_loss": loss, "train_acc": acc}, prog_bar=True, batch_size=self.batch_size)
         return loss
 
     def validation_step(self, batch):
-        out, loss = self.step(batch)
-        self.log_dict({"val_loss": loss}, prog_bar=True, batch_size=self.batch_size)
+        out, loss, acc = self.step(batch)
+        self.log_dict({"val_loss": loss, "val_acc": acc}, prog_bar=True, batch_size=self.batch_size)
         return loss
 
     def test_step(self, batch):
-        out, loss = self.step(batch)
-        self.log_dict({"test_loss": loss}, batch_size=self.batch_size)
+        out, loss, acc = self.step(batch)
+        self.log_dict({"test_loss": loss, "test_acc": acc}, batch_size=self.batch_size)
         return loss
 
     def predict_step(self, batch):
