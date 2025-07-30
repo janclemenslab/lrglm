@@ -179,6 +179,7 @@ class LogisticRegressionModel(L.LightningModule):
         self.save_hyperparameters()  # (ignore=['encoder'])
 
         self.example_data = (torch.randn((3, self.nb_feat, self.block_len)), [0])
+        self.example_input_array = self.example_data
         # self.output_shape = [None, *self.forward(self.example_data, task_id=[0]).shape[1:]]
 
     def L1_regularized_loss(self):
